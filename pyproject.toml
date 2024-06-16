@@ -1,7 +1,12 @@
 [tool.poetry]
 name = "pipeshell"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = "A simple pipeline execution library"
+license = "MIT"
+homepage = "https://github.com/filipecaixeta/pipeshell"
+repository = "https://github.com/filipecaixeta/pipeshell"
+documentation = "https://github.com/filipecaixeta/pipeshell/wiki"
+keywords = ["pipeline", "shell", "ci", ]
 authors = ["Filipe Caixeta <filipecaixeta@gmail.com>"]
 readme = "README.md"
 
