@@ -20,11 +20,15 @@ def assert_stdout(
     if same_order:
         for i, output in enumerate(expected_output):
             if output != actual_output[i]:
-                raise AssertionError(f"Expected output not found: {output}")
+                raise AssertionError(
+                    f"Expected output not found: {output}\nActual: {actual_output}"
+                )
     else:
         for output in expected_output:
             if output not in actual_output:
-                raise AssertionError(f"Expected output not found: {output}")
+                raise AssertionError(
+                    f"Expected output not found: {output}\nActual: {actual_output}"
+                )
 
 
 @patch("sys.exit")
@@ -117,15 +121,21 @@ class TestPipeline(unittest.TestCase):
 
     def test_background_step_failure(self, mock_print: MagicMock, mock_exit: MagicMock):
         background_step = Step(
-            name="background", command="exit 1", run_in_background=True
+            name="background", command="exit 1", run_in_background=True, verbose=True
         )
         next_step = Step(
-            name="next", command='echo "Next step"', dependencies=[background_step]
+            name="next",
+            command='echo "Next step"',
+            dependencies=[background_step],
+            verbose=True,
         )
         run(background_step, next_step)
         assert_stdout(
             mock_print,
             [
+                "background | started",
+                "background | finished with exit code 1",
+                "      next | skipped due to failed dependencies: background",
                 "\n================================================================================\n",
                 "Pipeline finished in 0:00:X\n",
                 "background | finished with exit code 1 in X seconds",

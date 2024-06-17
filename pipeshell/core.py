@@ -27,6 +27,7 @@ class Step:
         timeout: Optional[float] = None,
         show_output: bool = True,
         env_propagate: bool = True,
+        verbose: bool = False,
     ):
         """
         Initialize a Step.
@@ -45,6 +46,7 @@ class Step:
             timeout (Optional[float]): Timeout for this step in seconds.
             show_output (bool): Whether to show the output.
             env_propagate (bool): Whether to propagate the current environment variables.
+            verbose (bool): Whether to show verbose output.
         """
         self.name = name
         self._cmd = command
@@ -64,6 +66,7 @@ class Step:
         self._retries = retries
         self._retry_delay = retry_delay
         self.start_time: Optional[datetime] = datetime.now() + timedelta(hours=100)
+        self._verbose = verbose
         self._env: Dict = {}
         if env_propagate:
             self._env.update(os.environ)
@@ -103,6 +106,10 @@ class Step:
 
         for dep in self._dependencies:
             if dep.exit_code != 0 and dep.exit_code is not None:
+                if self._verbose:
+                    stdout_queue.put(
+                        (self.name, f"skipped due to failed dependencies: {dep.name}")
+                    )
                 self.exit_code = "skipped due to failed dependencies"
                 return
 
@@ -136,6 +143,9 @@ class Step:
                         stdout_queue.put((step_name, line))
                 stream.close()
 
+            if self._verbose:
+                stdout_queue.put((self.name, "started"))
+
             t_stdout = Thread(
                 target=handle_stream, args=(self.name, self._process.stdout)
             )
@@ -154,6 +164,11 @@ class Step:
                 self._process.wait()
             t_stdout.join()
             t_stderr.join()
+
+            if self._verbose:
+                stdout_queue.put(
+                    (self.name, f"finished with exit code {self.exit_code}")
+                )
 
             if self.exit_code == 0:
                 break
