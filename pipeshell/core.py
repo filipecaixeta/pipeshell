@@ -68,6 +68,7 @@ class Step:
         self.start_time: Optional[datetime] = datetime.now() + timedelta(hours=100)
         self._verbose = verbose
         self._progress_timer: Optional[Timer] = None
+        self._skipped = False
         self._env: Dict = {}
         if env_propagate:
             self._env.update(os.environ)
@@ -116,6 +117,15 @@ class Step:
         """
         for dep in self._dependencies:
             dep._finished.wait()
+            if dep._skipped:
+                if self._verbose:
+                    stdout_queue.put(
+                        (self.name, f"skipped due to skipped dependencies: {dep.name}")
+                    )
+                self.exit_code = "skipped due to skipped dependencies"
+                self._skipped = True
+                self._finished.set()
+                return
         for dep in self._optional_dependencies:
             dep._finished.wait()
 
@@ -126,6 +136,8 @@ class Step:
                         (self.name, f"skipped due to failed dependencies: {dep.name}")
                     )
                 self.exit_code = "skipped due to failed dependencies"
+                self._skipped = True
+                self._finished.set()
                 return
 
         args: Dict[str, Dict] = {"env": {}}
