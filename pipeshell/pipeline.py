@@ -18,6 +18,8 @@ def gather_all_steps(initial_steps):
                 visited.add(step)
                 if step._dependencies:
                     traverse(step._dependencies)
+                if step._optional_dependencies:
+                    traverse(step._optional_dependencies)
 
     traverse(initial_steps)
     return visited
@@ -61,7 +63,7 @@ def run(*steps: Step):
     for t in steps_threads:
         t.join()
 
-    success = all(step._status() for step in all_steps)
+    success = all(step._status() for step in all_steps if not step._skipped)
     message_color = "\033[92m" if success else "\033[91m"
     stdout_queue.put((None, None))
     try:
@@ -73,7 +75,9 @@ def run(*steps: Step):
     stdout_queue.put((None, f"Pipeline finished in {datetime.now() - start_time}\n"))
     all_steps = sorted(all_steps, key=lambda x: x.start_time)
     for step in all_steps:
-        if isinstance(step.exit_code, int):
+        if step._skipped:
+            stdout_queue.put((step.name, "\033[93mskipped\n"))
+        elif isinstance(step.exit_code, int):
             message_color = "\033[92m" if step.exit_code == 0 else "\033[91m"
             stdout_queue.put(
                 (
