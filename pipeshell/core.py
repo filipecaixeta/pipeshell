@@ -86,8 +86,13 @@ class Step:
 
     def _emit_progress(self, stdout_queue: queue.Queue):
         """Emits a progress message to the stdout queue."""
-        elapsed_time = datetime.now() - self.start_time
-        stdout_queue.put((self.name, f"running for {elapsed_time}")) # Output elapsed time
+        if self.start_time is not None:
+            elapsed_time = datetime.now() - self.start_time
+        else:
+            elapsed_time = None
+        stdout_queue.put(
+            (self.name, f"running for {elapsed_time}")
+        )  # Output elapsed time
         # Schedule the next progress update. Using a daemon thread ensures the timer won't block program exit
         self._progress_timer = Timer(60.0, self._emit_progress, args=(stdout_queue,))
         self._progress_timer.daemon = True
@@ -131,7 +136,9 @@ class Step:
         self.start_time = datetime.now()
 
         if self._verbose:
-            self._progress_timer = Timer(60.0, self._emit_progress, args=(stdout_queue,))
+            self._progress_timer = Timer(
+                60.0, self._emit_progress, args=(stdout_queue,)
+            )
             self._progress_timer.daemon = True
             self._progress_timer.start()
 
@@ -183,7 +190,10 @@ class Step:
 
             if self._verbose:
                 stdout_queue.put(
-                    (self.name, f"finished with exit code {self.exit_code} after {datetime.now() - inner_start_time}")
+                    (
+                        self.name,
+                        f"finished with exit code {self.exit_code} after {datetime.now() - inner_start_time}",
+                    )
                 )
 
             if self.exit_code == 0:
