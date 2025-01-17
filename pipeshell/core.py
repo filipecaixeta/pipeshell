@@ -3,7 +3,7 @@ import queue
 import subprocess
 import time
 from datetime import datetime, timedelta
-from threading import Event, Lock, Thread
+from threading import Event, Lock, Thread, Timer
 from typing import Dict, List, Optional, Union
 
 
@@ -67,6 +67,7 @@ class Step:
         self._retry_delay = retry_delay
         self.start_time: Optional[datetime] = datetime.now() + timedelta(hours=100)
         self._verbose = verbose
+        self._progress_timer: Optional[Timer] = None
         self._env: Dict = {}
         if env_propagate:
             self._env.update(os.environ)
@@ -82,6 +83,20 @@ class Step:
         if self._ignore_exit_code:
             return True
         return self.exit_code == 0
+
+    def _emit_progress(self, stdout_queue: queue.Queue):
+        """Emits a progress message to the stdout queue."""
+        if self.start_time is not None:
+            elapsed_time = datetime.now() - self.start_time
+        else:
+            elapsed_time = None
+        stdout_queue.put(
+            (self.name, f"running for {elapsed_time}")
+        )  # Output elapsed time
+        # Schedule the next progress update. Using a daemon thread ensures the timer won't block program exit
+        self._progress_timer = Timer(60.0, self._emit_progress, args=(stdout_queue,))
+        self._progress_timer.daemon = True
+        self._progress_timer.start()
 
     def __signal__(self, signal: int):
         """
@@ -120,7 +135,15 @@ class Step:
         # Run the command
         self.start_time = datetime.now()
 
-        for _ in range(self._retries + 1):
+        if self._verbose:
+            self._progress_timer = Timer(
+                60.0, self._emit_progress, args=(stdout_queue,)
+            )
+            self._progress_timer.daemon = True
+            self._progress_timer.start()
+
+        for r in range(self._retries + 1):
+            inner_start_time = datetime.now()
             self._mu.acquire()
             self._process = subprocess.Popen(
                 self._cmd,
@@ -167,12 +190,18 @@ class Step:
 
             if self._verbose:
                 stdout_queue.put(
-                    (self.name, f"finished with exit code {self.exit_code}")
+                    (
+                        self.name,
+                        f"finished with exit code {self.exit_code} after {datetime.now() - inner_start_time}",
+                    )
                 )
 
             if self.exit_code == 0:
                 break
-            time.sleep(self._retry_delay)
+            if r != self._retries:
+                time.sleep(self._retry_delay)
 
+        if self._verbose and self._progress_timer and self._progress_timer.is_alive():
+            self._progress_timer.cancel()
         self.elapsed_time = datetime.now() - self.start_time
         self._finished.set()
